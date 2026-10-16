@@ -1,0 +1,11 @@
+cordis.local.generated.yml
+.dsh-local/
+node_modules/
+lib/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db

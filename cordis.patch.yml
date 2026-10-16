@@ -1,0 +1,7 @@
+- insert:
+    - id: neko-wander
+      name: '@deepseek-ai/dsh-experimental-neko-wander'
+      config:
+        webServiceKey: !!js process.env.AMAP_WEB_KEY
+        jsApiKey: !!js process.env.AMAP_JS_KEY
+        jsSecurityCode: !!js process.env.AMAP_JS_SECURITY_CODE

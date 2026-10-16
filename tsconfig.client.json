@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src/client/**/*", "src/map-service.ts"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../client/ui-renderer" },
+    { "path": "../../client/ui-session" },
+    { "path": "../../client/ui-sidebar-right" }
+  ]
+}

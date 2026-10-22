@@ -20,7 +20,7 @@
   <tr>
     <td align="center"><img src="assets/neko.png" alt="溜达喵角色形象" height="280"></td>
     <td align="center">
-      <video src="assets/demo.mp4" controls width="498" height="280"></video>
+      <a href="https://www.bilibili.com/video/BV1bPns6uEaH"><img src="assets/demo-preview.svg" alt="点击在 B 站观看溜达喵演示视频" width="498" height="280"></a>
     </td>
   </tr>
 </table>

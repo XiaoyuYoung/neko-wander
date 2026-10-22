@@ -16,16 +16,10 @@
 
 溜达喵希望借助AI基础服务（大肥鱼牛逼），提供个性化的导航方案，可在对话中搜索地点、标记地图，规划和比较多种出行路线。
 
-目前版本仅为测试demo，更多惊喜还在规划
-
+目前版本仅为测试demo，更多还在规划
 
 <table>
-  <tr>
-    <td align="center"><img src="assets/neko.png" alt="溜达喵角色形象" height="280"></td>
-    <td align="center">
-      <video src="https://github.com/user-attachments/assets/f498ca64-5b1a-4f9f-82b3-eecf71df2711" controls height="280"></video>
-    </td>
-  </tr>
+      <video src="https://github.com/user-attachments/assets/f498ca64-5b1a-4f9f-82b3-eecf71df2711" controls width="340" height="280"></video>
 </table>
 
 
@@ -123,3 +117,7 @@ $env:AMAP_JS_SECURITY_CODE = '对应的 JS API 安全密钥'
 - **高德服务**：地点和路线结果受高德账号权限、配额、地区及实时数据影响。公交暂不支持途经点、指定出发时间、备选方案切换、火车或出租车接驳；票价和班次应在高德确认。
 - **导航跳转**：高德会重新规划，跳转后的路线可能与插件显示的折线不同。骑行入口主要面向手机；电动车需要在高德中手动切换相应模式。真实手机上的 App 唤起尚未完成验证。
 - **部署范围**：目前主要供开发者本机试用。虽然地图与定位接口使用 DSH Connection 鉴权，JS API 安全密钥仍会进入浏览器；公开部署前需要接入高德安全代理并验证 HTTPS、网络监听和访问控制。
+
+<p align="center">
+<img src="assets/neko.png" alt="溜达喵" height="280" align="center">
+</p>

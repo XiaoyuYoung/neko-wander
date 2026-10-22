@@ -1,87 +1,122 @@
-# 溜达喵地图插件原型
+# 溜达喵 Neko Wander
 
-这是一个可选的 DSH Web 插件。地图业务代码在 `src/map-service.ts`，Harness 工具与页面接入在 `src/index.ts` 和 `src/client/index.ts`。源码作为独立 Git 仓库管理，使用时放在 DSH 工作区的 `packages/experimental/neko-wander` 中，共用 DSH 的依赖和构建配置。
 
-## 配置与启动
+<p align="center"><img src="assets/logo.png" alt="溜达喵 Logo" height="180"> <img src="assets/neko-wander.png" alt="溜达喵 Logo" height="180"></p>
 
-申请高德 **Web 服务 API Key**、
+<h3 align="center">A little wander, a little wonder</h3>
 
-**Web 平台 JS API Key** 及其安全密钥，
+<h3 align="center">溜达溜达，瞅点儿新鲜</h3>
 
-分别设置 `AMAP_WEB_KEY`、`AMAP_JS_KEY`、`AMAP_JS_SECURITY_CODE`。不要把真实密钥写入仓库。先在仓库根目录构建客户端 bundle，再用本地脚本启动（脚本会生成指向当前源码的绝对路径 overlay）：
+
+
+## 太长不看
+
+溜达喵希望借助AI基础服务（大肥鱼牛逼），提供个性化的导航方案，可在对话中搜索地点、标记地图，规划和比较多种出行路线。
+
+目前版本仅为测试demo，更多惊喜还在规划
+
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/neko.png" alt="溜达喵角色形象" height="280"></td>
+    <td align="center">
+      <video src="assets/demo.mp4" controls width="498" height="280"></video>
+    </td>
+  </tr>
+</table>
+
+
+## 快速开始
+
+### 1. 申请高德 Key
+
+在[高德开放平台控制台](https://console.amap.com/)注册或登录，进入「应用管理」，创建一个应用，并在其中添加两种 Key：
+
+| 高德服务平台 | 用途 | 环境变量 |
+| --- | --- | --- |
+| [Web 服务](https://lbs.amap.com/api/webservice/create-project-and-key) | 地点、地址与路线查询，由 DSH Host 调用 | `AMAP_WEB_KEY` |
+| [Web 端（JS API）](https://lbs.amap.com/api/javascript-api-v2/prerequisites) | 在浏览器显示交互地图 | `AMAP_JS_KEY` |
+| 创建 JS API Key 时得到的安全密钥 | JS API 鉴权 | `AMAP_JS_SECURITY_CODE` |
+
+
+在启动 DSH 的同一个终端设置环境变量。PowerShell 示例：
 
 ```powershell
-$env:AMAP_WEB_KEY = 'YOUR_AMAP_WEB_KEY'
-$env:AMAP_JS_KEY = 'YOUR_AMAP_JS_KEY'
-$env:AMAP_JS_SECURITY_CODE = 'YOUR_AMAP_JS_SECURITY_CODE'
+$env:AMAP_WEB_KEY = '你的 Web 服务 Key'
+$env:AMAP_JS_KEY = '你的 Web 端 JS API Key'
+$env:AMAP_JS_SECURITY_CODE = '对应的 JS API 安全密钥'
+```
+
+macOS / Linux 示例：
+
+```sh
+export AMAP_WEB_KEY='你的 Web 服务 Key'
+export AMAP_JS_KEY='你的 Web 端 JS API Key'
+export AMAP_JS_SECURITY_CODE='对应的 JS API 安全密钥'
+```
+
+
+### 2. 安装到 DSH Web profile
+
+**npm 发布后**，可在已安装 DSH CLI 的环境中运行：
+
+```sh
+dsh plugin --profile web add @deepseek-ai/dsh-experimental-neko-wander
+dsh web
+```
+
+也可以在 DSH Web 侧边栏的「插件」页面安装同一个 npm 包名。插件的 `dsh.bundle` 会启用 `cordis.patch.yml`，从上述环境变量读取 Key。安装后若插件尚未生效，请重启 Web profile。
+
+
+### 3. 在对话中使用
+
+打开 Web 对话，右侧会出现「溜达喵地图」。首次打开地图时允许浏览器定位；也可以在对话里明确给出城市、起点或地址。例如：
+
+> 附近有没有适合散步的公园？先在地图上给我几个候选点。
+
+> 回家路上想绕去一个安静的地方，帮我比较绕行时间；我选好以后再规划骑行路线。
+
+> 把长风街一带圈出约 500 米范围。那个文具店的具体位置再用大头针标出来。
+
+地点搜索、地址查询和周边搜索会把候选点标在地图上；点击大头针或地址条目可以高亮地点。**点击地图标记只是查看地点，不会把它自动加入路线。** 需要路线时在对话中明确选择地点和出行方式。已规划路线不会因为继续搜索沿途店铺而消失；只有重新规划或要求清除路线才会改变它。
+
+目前支持驾车、步行、自行车骑行、公交及地铁换乘、电动自行车路线；也可以比较直达与途经一个候选点的时间、距离差。地图上的导航入口会打开高德，由高德重新计算并让你确认行程。
+
+## 源码本地试用
+
+此仓库的源码按 DSH 工作区布局使用：把仓库放在 `deepseek-harness/packages/experimental/neko-wander`。需要与本插件匹配的 DSH 源码、Node.js 22.19.x 或 24+、pnpm，以及前面申请的三个高德配置值。当前仓库中的 `run-local.ps1` 仅提供 Windows PowerShell 启动方式。
+
+在 **DSH 仓库根目录**执行：
+
+```powershell
+pnpm install
 pnpm run build:artifacts
+
+$env:AMAP_WEB_KEY = '你的 Web 服务 Key'
+$env:AMAP_JS_KEY = '你的 Web 端 JS API Key'
+$env:AMAP_JS_SECURITY_CODE = '对应的 JS API 安全密钥'
+
 .\packages\experimental\neko-wander\run-local.ps1
 ```
 
-`cordis.patch.yml` 是将该包安装到 DSH profile 后使用的组合包配置层；本地源码运行使用 `run-local.ps1`。本地脚本默认将 `DSH_HOME` 放在插件目录的 `.dsh-local`，也可预先指定其他位置。
+脚本以源码 overlay 启动 DSH Web；默认把试用数据放在插件目录的 `.dsh-local`，不会把 Key 写入仓库。它要求插件确实位于上述 DSH 工作区路径。该方式用于本地验证；npm 安装方式使用预构建的 `lib/`，不依赖这个脚本。
 
-进入 Web 对话后，右侧 Sidebar 的引导页会出现“溜达喵地图”。第一次调用地图工具产生候选点时，地图标签会自动打开。地图可缩放、拖动；搜索结果使用蓝色大头针，点击大头针或下方地址条目后，该标记变红，对应条目移到列表首位并高亮。切换选中地点时，其他标记恢复蓝色；选择只在当前地图页面内保存，不会自动生成路线。明确调用路线工具后，驾车、步行及骑行显示深蓝色路线折线，线宽为 8 像素，并带白色描边与方向箭头；公交和地铁的乘车段为绿色实线，步行接驳为蓝色虚线。
+开发者可查看[实现与接口备忘录](https://github.com/XiaoyuYoung/neko-wander/blob/main/docs/implementation-notes.md)，了解路线模式、定位状态和错误处理等细节。
 
-规划路线后继续搜索蛋糕店、文具店等沿途地点时，地点搜索、周边搜索及地址查询只更新候选标记，清除旧范围圆圈和绕行比较，保留已规划的路线、分段信息及导航入口；搜索结果中的 `routePreserved` 表示是否保留了一条已有路线。搜索不会自动把店铺加入路线。成功规划新路线才替换旧路线；用户要求“清除路线”时调用 `neko_clear_route`，移除路线与绕行比较，保留地点标记和范围圆圈。此行为适用于全部出行方式。
+## 当前提供的能力
 
-首次打开地图时会通过高德定位插件请求用户当前位置，浏览器可能弹出定位授权。定位成功后显示带白边和浅蓝光圈的蓝色圆点，并在没有候选地点或用户拖动操作时将视野移到当前位置；地图右下角的圆形雷达图标可重新定位并居中，悬停提示为“回到当前位置”，定位过程中图标显示脉冲效果。地图顶部不显示标题、说明和定位成功文字。结果使用高德 GCJ-02 坐标，IP 定位会在悬停提示中标明“大致位置”。定位失败或超时会在图标上方提示检查权限和网络，地图仍可手动浏览；地图初始化不再指定固定城市。定位超时由插件配置 `locationTimeoutMs` 控制，默认 10000 毫秒，可设置为 1000–60000 毫秒。定位会通过经过 DSH 登录校验的接口同步到当前对话，并暂存在 Host 内存；实际用于搜索或路线时，所用中心点或起点会进入工具结果和会话记录。
+| 能力 | 行为 |
+| --- | --- |
+| 动态地图与定位 | 右侧地图显示候选地点、路线和当前位置；浏览器授权后可以用当前位置搜索或作为路线起点。 |
+| 地点与区域 | 搜索地点、查询地址或坐标；具体地点用大头针，模糊区域用可调整半径的圆圈。 |
+| 路线与绕行 | 对比途经点与直达路线，按选定方式显示路线、时间和距离；公交路线可显示换乘和步行接驳信息。 |
+| 继续探索 | 路线生成后仍可搜索沿途地点；新搜索只更新候选标记，不会自动改写路线。 |
 
-可用工具：`neko_search_places`、`neko_search_nearby`、`neko_geocode`、`neko_reverse_geocode`、`neko_show_place`、`neko_show_area`、`neko_clear_area`、`neko_clear_route`、`neko_compare_detour`、`neko_plan_route`、`neko_drive_route`。坐标统一采用高德 GCJ-02 的“经度,纬度”格式。路线工具会把折线同步到当前对话的地图标签。
+插件工具使用 `neko_` 前缀，包括 `neko_search_places`、`neko_search_nearby`、`neko_geocode`、`neko_reverse_geocode`、`neko_show_place`、`neko_show_area`、`neko_compare_detour`、`neko_plan_route` 和清除工具。坐标采用高德 GCJ-02 的「经度,纬度」顺序。
 
-未指定起点时，路线规划和绕行比较使用当前对话最近的精确定位，明确指定的起点优先。周边搜索不填写 `center` 时也使用当前位置；`neko_search_places` 未指定城市或中心时，默认搜索当前地点周围 3000 米，指定城市则保留城市范围搜索。可以直接说“附近有什么公园”或“骑行去这里”。定位过期或尚未获取时，工具会打开地图并等待浏览器定位；失败、IP 推测位置或超时会要求用户重试定位或提供起点地址，不会猜测起点。默认定位有效期由 `currentLocationMaxAgeMs` 控制（默认 60000 毫秒，范围 1000–600000）；工具等待定位的上限由 `locationRequestTimeoutMs` 控制（默认 20000 毫秒，范围 1000–120000）；默认搜索半径由 `searchRadiusMeters` 控制（默认 3000 米，范围 1–50000）。
+## 已知限制
 
-`neko_plan_route` 必须指定出行方式：`driving`（驾车）、`walking`（步行）、`cycling`（自行车骑行）、`transit`（公交及地铁换乘）或 `ebike`（电动自行车）。在对话中可以说“规划骑行去这里的路线”“步行经过这个公园再回家”或“从当前位置坐公交去这里”，地图下方会显示对应的方式、时长和距离。用户未说明方式时，工具说明要求先询问；`neko_drive_route` 保留为明确的驾车入口。自行车使用[高德骑行路径规划](https://lbs.amap.com/api/webservice/guide/api/direction)的 `/v4/direction/bicycling`，按 `errcode` 判断结果，从 `data.paths[].duration` 读取总耗时，不依赖可选的 `cost` 字段。步行和电动车使用[高德路径规划 2.0](https://lbs.amap.com/api/webservice/guide/api/newroute)，请求 `cost,polyline`；步行及骑行带途经点时分别计算前后两段，合并后再计算总时长和距离。
-
-公交调用[高德公交路径规划](https://lbs.amap.com/api/webservice/guide/api/direction)的 `/v3/direction/transit/integrated`，自动通过逆地理编码查询起终点的城市编码，并传入 `extensions=all`。从服务返回的备选方案中选择第一条不含实际火车、出租车接驳的方案，包括总耗时、距离、换乘次数、步行距离、可用时的预计票价和各段线路、上下车站及途经站数；同一乘车段有多条可选线路时使用第一条。`railway`、`taxi` 中的空数组、空字符串、嵌套空对象和零值占位不视为实际接驳；不能仅凭字段存在就拒绝整条公交方案。地图用绿色实线绘制公交/地铁，蓝色虚线绘制步行接驳，各段独立绘制，不用直线补齐缺失轨迹。“在高德查看”以 `mode=bus` 打开高德，由高德重新计算并确认实时方案。未接入公交备选方案切换、指定出发时间或换乘策略；公交暂不支持 `via` 和绕行比较，应分别查询各段行程，不能把独立估算当作保证接上的班次。缺少必要轨迹、线路或车站资料会报错；所有备选方案均含未支持的接驳时说明工具限制，并保留已有地图状态，不据此断言当地没有公交。
-
-驾车、步行、骑行、公交使用现有 Web 服务 API Key。[高德个人开发者服务说明](https://developer.amap.com/upgrade)列出这些基础 LBS 服务；实际权限、共享配额及有效期以账户控制台为准。认证身份不能保证每次调用成功；接口返回权限或额度错误时会报告高德错误码，不会切换出行方式或发布部分路线。
-
-`10021 / CUQPS_HAS_EXCEEDED_THE_LIMIT` 表示账号对某个接口的每秒请求数超限，与月调用量或服务是否开通不同，见[高德错误码说明](https://lbs.amap.com/api/webservice/guide/tools/info)。同一个插件实例的全部 Web 服务请求共用一个队列，包含各个对话、途经点分段、绕行比较和公交城市查询；默认发送间隔 `requestIntervalMs=500` 毫秒，单次 HTTP 请求结束后才发送下一次。`10021` 会触发整个队列冷却，按 `qpsRetryDelayMs=1200` 毫秒乘以失败次数等待，最多额外重试 `qpsRetries=2` 次；权限、日配额、格式和普通网络错误不会自动重试。配置范围分别为 50–60000 毫秒、1000–60000 毫秒、0–3 次，均可在插件配置中修改。等待时可以取消工具；插件卸载会取消排队、冷却及进行中的请求。最终失败保留旧地图状态，并明确提示请求频率超限。该队列只覆盖当前进程中的插件实例；同账号其他应用、其他 DSH 进程和浏览器地图 SDK 的调用仍可能占用高德侧限额，持续超限时应检查控制台 QPS 详情并降低这些调用的频率。
-
-绕行比较通过 `neko_compare_detour` 的 `mode` 参数使用相同出行方式计算直达和途经路线，返回时间与距离差，不绘制最终路线；旧调用省略 `mode` 时仍按驾车处理。新路线会清除旧绕行比较。任何一段查询失败时会取消该次规划或比较的其余请求，不会发布部分路线或替换为其他出行方式，已有地图状态保留，错误由工具返回。接口错误保留高德错误码和说明；路线对象或字段格式异常时指明缺失字段，例如 `data`、`data.paths` 或 `route.paths[0].cost`，不输出含 Key 的请求地址或原始响应。
-
-成功规划路线后，地图下方显示“开始导航”链接（公交显示“在高德查看”）。点击后在新页面打开高德，并在支持的手机浏览器中尝试唤起已安装的高德 App；用户在高德中确认路线后继续出行。链接使用原始起点、终点、途经点及高德坐标，不从轨迹首尾推测目的地，也不包含 API 密钥。高德会重新规划路线，可能与当前折线不同。[高德 URI 文档](https://lbs.amap.com/api/uri-api/guide/travel/route)说明骑行仅支持移动端，途经点仅支持驾车；因此步行、骑行和电动车经过途经点时，“开始导航”先去途经点，“导航后半程”再前往终点。电动车跳转打开骑行入口，界面明确提示在手机高德中切换为电动车模式；不声称链接能自动选择电动车。导航链接保留在当前地图页面，模型可见结果不增加链接或轨迹。
-
-具体地址、店铺、入口或景点使用大头针；“长风街一带”“某个路口那一片”等模糊区域使用圆圈。回答“途中那个店在哪里”时，已有经查询确认的坐标和地址可直接调用 `neko_show_place`，传入名称、坐标与具体地址；工具添加或更新大头针，把该地址放到候选列表前面，并清除旧圆圈，同时保留其他地点、路线和绕行结果。重复标注同名同坐标的地点不会增加重复项；点击标记仍沿用红色选中和地址高亮交互。未知坐标应先搜索或查询地址，不允许猜测坐标。
-
-描述模糊区域或明确要求“店周边500米”时，先用地点搜索或地址查询确定中心，再调用 `neko_show_area`，提供区域名称、中心坐标与 1–50000 米的整数半径。不能仅因店铺位于“附近”或“沿途”就用圆圈代替大头针。地图用淡蓝色半透明圆圈标示建议探索范围，并自动调整视野以展示圆圈；下方显示名称和约半径。这是探索建议，不是行政边界或地块边界；模型应说明自行估计的半径。例如可以说“把长风街一带圈出来”，再说“缩小到300米”。重复调用替换圆圈，`neko_clear_area` 清除圆圈；两者保留候选点和路线。新的地点搜索或地址查询会清除旧圆圈。无效标注参数不改变已有地图状态。
-
-地图状态和定位按 DSH Session 保存在运行进程内，浏览器每 2.5 秒读取一次；重启服务后会清空。当前客户端使用 DSH Connection 的 `/api/neko-wander/state` 与 `/api/neko-wander/location`，要求登录凭据和合法的 Host/Origin，仅 owner 浏览器可访问。旧 `/neko-wander/state` 保留为仅本机可读的兼容入口。JS API 安全密钥按高德开发模式注入浏览器；公开部署前应改为高德建议的服务端安全代理。高德 Web 服务 Key 只留在 Host 端。
-
-## Model Experience
-
-### Map tool definitions
-
-#### What the model sees
-
-模型可调用地点搜索、地址查询、单点标注、范围绘制与清除、绕行比较、路线规划与清除工具。工具说明区分具体地点的大头针与模糊区域的圆圈，实际选择由模型根据对话判断。搜索工具说明要求先展示候选点并保留已有路线；标注工具要求使用查询确认的坐标，范围工具还要求说明估计半径；路线工具说明要求用户选定地点或明确要求路线后再调用，并按用户的出行方式计算。仅在用户要求时清除路线。
-
-#### Token effect
-
-工具定义带来固定的 schema token 开销。
-
-#### KV Cache effect
-
-定义不变时工具 schema 可保持缓存前缀稳定；插件启用或关闭会改变工具列表。
-
-### Tool results
-
-#### What the model sees
-
-地点与坐标查询返回候选资料和 `routePreserved`，周边搜索同时返回所用中心点；单点标注返回地点资料和 `marker: "pin"`；范围绘制返回区域名称、中心、半径和近似标记；绕行工具返回出行方式、所用起点及与直达路线的差值；路线工具返回出行方式、所用起点、时长和距离，公交还返回换乘、步行距离、可用时的预计票价和各段线路与上下车站；清除路线返回 `routeCleared: true`。完整路线折线仅供右侧地图绘制。工具结果进入对话记录，地图状态本身不是持久 Session 数据。
-
-#### Token effect
-
-结果随候选地点数量增长，路线折线不会加入模型上下文。
-
-#### KV Cache effect
-
-新的工具结果附加在已有请求前缀之后。
-
-## Known Limitations and Deferred Work
-
-- 这是地图模块原型，没有推荐排序、社交媒体资料或可供模型读取的用户选择状态。
-- 高德 POI 和各出行方式路线取决于账户权限、配额、地区及实时服务；测试使用模拟响应，没有验证当前账户的真实 API 权限。公交方案未接入实时车辆到站、火车或出租车接驳；运营时间和班次需在高德确认。
-- 跳转链接已验证参数与界面行为，未在真实 Android/iOS 设备上验证 App 唤起。浏览器、安装状态及高德版本可能影响跳转，骑行和电动车请使用手机；完成导航启动仍需在高德中确认。
-- 定位依赖浏览器权限、设备和网络；精确定位需要安全的浏览器环境（HTTPS 或 localhost）。IP 结果可能受代理影响，无法保证代表用户真实位置。
-- 当前地图与定位接口已接入 DSH Connection 鉴权；手机精确定位仍需可信 HTTPS 和正确的网络监听配置。公开部署还需使用高德安全代理。
+- **定位与状态**：精确定位需要浏览器授权，以及 HTTPS 或 `localhost` 等安全环境；IP 定位只是大致位置。地图和定位状态保存在当前 DSH 进程内，重启后清空。
+- **高德服务**：地点和路线结果受高德账号权限、配额、地区及实时数据影响。公交暂不支持途经点、指定出发时间、备选方案切换、火车或出租车接驳；票价和班次应在高德确认。
+- **导航跳转**：高德会重新规划，跳转后的路线可能与插件显示的折线不同。骑行入口主要面向手机；电动车需要在高德中手动切换相应模式。真实手机上的 App 唤起尚未完成验证。
+- **部署范围**：目前主要供开发者本机试用。虽然地图与定位接口使用 DSH Connection 鉴权，JS API 安全密钥仍会进入浏览器；公开部署前需要接入高德安全代理并验证 HTTPS、网络监听和访问控制。

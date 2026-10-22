@@ -16,6 +16,29 @@ const sessionId = 'location-test' as ComponentProps<typeof MapBody>['sessionId']
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete window.AMap; delete window.__NEKO_WANDER_AMAP__ })
 
+it('draws bus and walking legs separately and shows transfer instructions with a bus handoff', async () => {
+  const route: Route = { mode: 'transit', origin: { lng: 112, lat: 38 }, destination: { lng: 112.01, lat: 38.01 },
+    durationMinutes: 30, distanceKm: 5, path: [{ lng: 112, lat: 38 }, { lng: 112.01, lat: 38.01 }],
+    sections: [
+      { mode: 'walking', path: [{ lng: 112, lat: 38 }, { lng: 112.001, lat: 38.001 }] },
+      { mode: 'transit', path: [{ lng: 112.002, lat: 38.002 }, { lng: 112.01, lat: 38.01 }] },
+    ], transit: { transfers: 0, walkingMeters: 200, fareYuan: 2,
+      legs: [{ line: '公交1路', boardingStop: '起点站', alightingStop: '终点站', stops: 3 }] } }
+  const f = await fixture(false, undefined, route)
+  await waitFor(() => { expect(f.polylines).toHaveLength(2) })
+  expect(f.polylines.map(line => line.options)).toMatchObject([
+    { path: [[112, 38], [112.001, 38.001]], strokeColor: '#165DDE', strokeStyle: 'dashed' },
+    { path: [[112.002, 38.002], [112.01, 38.01]], strokeColor: '#087F5B', strokeStyle: 'solid' },
+  ])
+  const link = screen.getByRole('link', { name: /在高德查看/ })
+  expect(new URL(link.getAttribute('href')!).searchParams.get('mode')).toBe('bus')
+  expect(screen.getByText('公交1路：起点站 上车，终点站 下车')).toBeTruthy()
+  expect(screen.getByText('预计票价：¥2')).toBeTruthy()
+  expect(screen.getByText('换乘 0 次 · 步行 200 米')).toBeTruthy()
+  expect(screen.queryByRole('link', { name: /导航后半程/ })).toBeNull()
+  expect(screen.getByText('公交路线：约 30 分钟，5 公里').textContent).toMatchInlineSnapshot('"公交路线：约 30 分钟，5 公里"')
+})
+
 async function fixture(withCandidate: boolean | Place[] = false, area?: MapArea, route?: Route) {
   const callbacks: ((status: string, value: LocationResult) => void)[] = []
   const view = { add: vi.fn(), remove: vi.fn(), setFitView: vi.fn(), setZoomAndCenter: vi.fn(), destroy: vi.fn(),
@@ -56,8 +79,9 @@ async function fixture(withCandidate: boolean | Place[] = false, area?: MapArea,
   const complete = async (index = 0) => {
     await act(async () => { callbacks[index]!('complete', { position: { getLng: () => 112.55, getLat: () => 37.87 }, location_type: 'html5' }) })
   }
-  const refresh = async (places = responseState.places, nextArea: MapArea | null | undefined = responseState.area, locationRequestId = responseState.locationRequestId) => {
-    responseState = { ...responseState, revision: responseState.revision + 1, places, area: nextArea ?? undefined, locationRequestId }
+  const refresh = async (places = responseState.places, nextArea: MapArea | null | undefined = responseState.area,
+    locationRequestId = responseState.locationRequestId, nextRoute: Route | null | undefined = responseState.route) => {
+    responseState = { ...responseState, revision: responseState.revision + 1, places, area: nextArea ?? undefined, locationRequestId, route: nextRoute ?? undefined }
     const handler = intervals.mock.calls.find(call => call[1] === 2500)![0]
     if (typeof handler !== 'function') throw new Error('Expected a polling callback')
     await act(async () => { handler() })
@@ -170,6 +194,52 @@ it.each(['walking', 'cycling', 'ebike'] as const)('labels the %s route with the 
   await waitFor(() => { expect(f.view.setFitView).toHaveBeenCalled() })
   expect(f.polylines[0]?.options).toMatchObject({ strokeColor: '#165DDE', strokeWeight: 8,
     strokeOpacity: 1, isOutline: true, outlineColor: '#ffffff', borderWeight: 2 })
+})
+
+it.each([
+  ['driving', 'car'], ['cycling', 'ride'], ['walking', 'walk'], ['transit', 'bus'], ['ebike', 'ride'],
+] as const)('keeps the %s route, geometry and navigation when shop results refresh', async (mode, handoff) => {
+  const path = [{ lng: 112, lat: 38 }, { lng: 112.01, lat: 38.01 }]
+  const route: Route = { mode, origin: path[0]!, destination: path[1]!, path, durationMinutes: 20, distanceKm: 3,
+    ...(mode === 'transit' ? {
+      sections: [{ mode: 'walking' as const, path }, { mode: 'transit' as const, path }],
+      transit: { transfers: 0, walkingMeters: 200, legs: [{ line: '地铁2号线', boardingStop: '起点站', alightingStop: '终点站' }] },
+    } : {}) }
+  const f = await fixture(true, undefined, route)
+  const lineCount = mode === 'transit' ? 2 : 1
+  await waitFor(() => { expect(f.polylines).toHaveLength(lineCount) })
+  const originalLines = f.polylines.slice()
+  const shop: Place = { id: 'cake', name: '沿途蛋糕店', address: '测试街1号', point: { lng: 112.002, lat: 38.002 } }
+  await f.refresh([shop])
+  await waitFor(() => { expect(f.polylines).toHaveLength(lineCount * 2) })
+  expect(screen.getByRole('button', { name: /沿途蛋糕店/ })).toBeTruthy()
+  expect(screen.getByText(`${zh[mode]}路线：约 20 分钟，3 公里`)).toBeTruthy()
+  const link = screen.getByRole('link', { name: mode === 'transit' ? /在高德查看/ : /开始导航/ })
+  expect(new URL(link.getAttribute('href')!).searchParams.get('mode')).toBe(handoff)
+  for (const line of f.polylines.slice(-lineCount)) {
+    expect(f.view.add.mock.lastCall![0]).toContain(line)
+    expect(f.view.setFitView.mock.lastCall![0]).toContain(line)
+    expect(line.options).toMatchObject({ path: [[112, 38], [112.01, 38.01]], strokeWeight: 8, strokeOpacity: 1 })
+  }
+  expect(f.view.remove.mock.calls.some(([removed]) => Array.isArray(removed) && originalLines.every(line => removed.includes(line)))).toBe(true)
+  if (mode === 'transit') {
+    expect(f.polylines.at(-1)!.options).toMatchObject({ strokeColor: '#087F5B', strokeStyle: 'solid' })
+    expect(f.polylines.at(-2)!.options).toMatchObject({ strokeColor: '#165DDE', strokeStyle: 'dashed' })
+    expect(screen.getByText('地铁2号线：起点站 上车，终点站 下车')).toBeTruthy()
+  }
+})
+
+it('removes route geometry and navigation after an explicit clear while keeping place markers', async () => {
+  const f = await fixture(true, undefined, { mode: 'driving', origin: { lng: 112, lat: 38 }, destination: { lng: 112.01, lat: 38.01 },
+    path: [{ lng: 112, lat: 38 }, { lng: 112.01, lat: 38.01 }], durationMinutes: 10, distanceKm: 3 })
+  await waitFor(() => { expect(f.polylines).toHaveLength(1) })
+  const line = f.polylines[0]!
+  await f.refresh(undefined, undefined, undefined, null)
+  expect(screen.queryByRole('link', { name: /开始导航/ })).toBeNull()
+  expect(screen.queryByText(/驾车路线/)).toBeNull()
+  expect(screen.getByRole('button', { name: /候选步道/ })).toBeTruthy()
+  expect(f.view.remove.mock.calls.some(([removed]) => Array.isArray(removed) && removed.includes(line))).toBe(true)
+  expect(f.view.add.mock.lastCall![0]).not.toContain(line)
 })
 
 it('shows navigation to the waypoint and a separate onward link for a cycling route', async () => {

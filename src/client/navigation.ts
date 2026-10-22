@@ -5,7 +5,7 @@ function amapLink(mode: TravelMode, origin: Point, destination: Point, via?: Poi
   const url = new URL('https://uri.amap.com/navigation')
   url.searchParams.set('from', pointText(origin))
   url.searchParams.set('to', pointText(destination))
-  url.searchParams.set('mode', { driving: 'car', walking: 'walk', cycling: 'ride', ebike: 'ride' }[mode])
+  url.searchParams.set('mode', { driving: 'car', walking: 'walk', cycling: 'ride', transit: 'bus', ebike: 'ride' }[mode])
   if (via) url.searchParams.set('via', pointText(via))
   url.searchParams.set('src', 'neko_wander')
   url.searchParams.set('coordinate', 'gaode')

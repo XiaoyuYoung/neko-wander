@@ -13,6 +13,7 @@ import type {} from '@deepseek-ai/dsh-agent-loop'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { transitResponse } from './transit-response.ts'
 
 let context: Context | undefined
 let root: string | undefined
@@ -43,16 +44,27 @@ it('distinguishes exact place pins from exploration circles while retaining a pl
   ].join('\n') + '\n')
   const nativeFetch = fetch
   const providerCalls: URL[] = []
+  let transitFails = false
+  let transitUnsupported = false
+  let cyclingInvalid = false
+  let cyclingQps = false
   vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
     if (url.hostname !== 'restapi.amap.com') return nativeFetch(input, init)
     providerCalls.push(url)
+    if (url.pathname === '/v3/geocode/regeo') return Response.json({ status: '1', regeocode: { addressComponent: { citycode: '0351' } } })
+    if (url.pathname === '/v3/direction/transit/integrated') {
+      const response = transitResponse()
+      if (transitUnsupported) Object.assign(response.route.transits[0]!.segments[0]!, { railway: { trip: 'G123' } })
+      return Response.json(transitFails ? { status: '0', info: 'USER_DAILY_QUERY_OVER_LIMIT', infocode: '10003' } : response)
+    }
     if (url.pathname === '/v3/place/around') return new Response(JSON.stringify({ status: '1', pois: [
       { id: 'nearby', name: '附近公园', address: '公园入口', location: '112.01,38.01' },
     ] }))
-    if (url.pathname === '/v5/direction/bicycling') return new Response(JSON.stringify({
-      status: '1', route: { paths: [{ distance: '1500', cost: { duration: '600' }, steps: [{ polyline: '112,38;112.01,38.01' }] }] },
-    }))
+    if (url.pathname === '/v4/direction/bicycling' && cyclingQps) return Response.json({ errcode: 10021, errmsg: 'CUQPS_HAS_EXCEEDED_THE_LIMIT' })
+    if (url.pathname === '/v4/direction/bicycling') return Response.json(cyclingInvalid ? { errcode: 0, data: [] } : {
+      errcode: 0, errmsg: 'OK', data: { paths: [{ distance: 1500, duration: 600, steps: [{ polyline: '112,38;112.01,38.01' }] }] },
+    })
     if (url.pathname !== '/v3/geocode/geo') throw new Error('Unexpected AMap endpoint')
     return new Response(JSON.stringify({ status: '1', geocodes: [
       { formatted_address: '太原市坞城北街52号军旅苑', location: '112,38' },
@@ -89,6 +101,7 @@ it('distinguishes exact place pins from exploration circles while retaining a pl
     toolCallResponse('show-region', 'neko_show_area', { name: '长风街一带', center: '112,38', radiusMeters: 800 }), textResponse('已圈出长风街一带约800米。'),
     toolCallResponse('show-shop-again', 'neko_show_place', { name: '双象文具（解放路店）', location: '112.005,38.005', address: '解放路85号' }), textResponse('已恢复店铺大头针。'),
     toolCallResponse('nearby-current', 'neko_search_places', { keywords: '公园' }), textResponse('已找到当前位置附近的公园。'),
+    toolCallResponse('bus-route', 'neko_plan_route', { mode: 'transit', destination: '112.01,38.01' }), textResponse('公交及地铁换乘路线已显示。'),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
   const agent = await ctx.agentLoop.create(SessionId('area-composition'), { provider: 'mock', model: 'mock' })
@@ -153,7 +166,7 @@ it('distinguishes exact place pins from exploration circles while retaining a pl
   expect(await readState()).toEqual(cycleState)
   await ask('按骑行方式比较经过候选点多花多少时间。')
   expect(await readState()).toMatchObject({ detour: { mode: 'cycling', extraMinutes: 10, extraKm: 1.5 } })
-  expect(providerCalls.filter(url => url.pathname.startsWith('/v5/direction/'))).toHaveLength(4)
+  expect(providerCalls.filter(url => url.pathname === '/v4/direction/bicycling')).toHaveLength(4)
   expect(providerCalls.some(url => url.pathname === '/v3/direction/driving')).toBe(false)
   const withRouteAndDetour = await readState()
   const callsBeforeMarking = providerCalls.length
@@ -194,6 +207,62 @@ it('distinguishes exact place pins from exploration circles while retaining a pl
   expect(providerCalls.at(-1)?.searchParams.get('location')).toBe('112,38')
   expect(providerCalls.at(-1)?.searchParams.get('radius')).toBe('3000')
   expect(await readState()).toMatchObject({ places: [{ name: '附近公园' }] })
+  await ask('从当前位置坐公交去这里。')
+  let busState = await readState()
+  expect(busState).toMatchObject({ route: { mode: 'transit', origin: { lng: 112, lat: 38 }, transit: { transfers: 1, walkingMeters: 500 } } })
+  const busEvent = agent.session.snapshotEvents().find(event => event.type === 'tool/result' && event.data.message.source.callId === 'bus-route')
+  if (busEvent?.type !== 'tool/result') throw new Error('Missing transit tool result')
+  expect(busEvent.data.message.content).toMatchInlineSnapshot(`
+    [
+      {
+        "text": "{"mode":"transit","origin":{"lng":112,"lat":38},"durationMinutes":30,"distanceKm":5,"transit":{"walkingMeters":500,"transfers":1,"legs":[{"line":"公交1路","boardingStop":"起点站","alightingStop":"换乘站","stops":3},{"line":"地铁2号线","boardingStop":"换乘站","alightingStop":"终点站","stops":2}],"fareYuan":4}}",
+        "type": "text",
+      },
+    ]
+  `)
+  for (const search of [
+    { name: 'neko_search_places', arguments: { keywords: '蛋糕', center: '112,38' } },
+    { name: 'neko_search_nearby', arguments: { keywords: '蛋糕', center: '112,38', radiusMeters: 500 } },
+    { name: 'neko_geocode', arguments: { address: '蛋糕店', city: '太原' } },
+  ]) {
+    const result = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId(`retain-route-${search.name}`), ...search })
+    expect(result.isError).toBe(false)
+    expect(await readState()).toHaveProperty('route', busState.route)
+    const text = result.content.find(block => block.type === 'text')
+    expect(text?.type === 'text' ? JSON.parse(text.text) : null).toHaveProperty('routePreserved', true)
+    if (search.name === 'neko_search_nearby') expect(result.content).toMatchInlineSnapshot(`
+      [
+        {
+          "text": "{"places":[{"id":"nearby","name":"附近公园","address":"公园入口","point":{"lng":112.01,"lat":38.01}}],"center":{"lng":112,"lat":38},"routePreserved":true}",
+          "type": "text",
+        },
+      ]
+    `)
+  }
+  busState = await readState()
+  const stopover = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('bus-stopover'),
+    name: 'neko_plan_route', arguments: { mode: 'transit', origin: '112,38', destination: '112.01,38.01', via: '112.005,38.005' } })
+  expect(stopover.isError).toBe(true)
+  expect(await readState()).toEqual(busState)
+  transitUnsupported = true
+  const unsupportedTransit = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('bus-unsupported'),
+    name: 'neko_plan_route', arguments: { mode: 'transit', origin: '112,38', destination: '112.01,38.01' } })
+  expect(unsupportedTransit.isError).toBe(true)
+  expect(unsupportedTransit.content).toMatchInlineSnapshot(`
+    [
+      {
+        "text": "Error: 高德返回的备选方案均包含暂未支持的火车或出租车接驳，请在高德查看完整方案或调整起终点后重试",
+        "type": "text",
+      },
+    ]
+  `)
+  expect(await readState()).toEqual(busState)
+  transitUnsupported = false
+  transitFails = true
+  const deniedTransit = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('bus-denied'),
+    name: 'neko_plan_route', arguments: { mode: 'transit', origin: '112,38', destination: '112.01,38.01' } })
+  expect(deniedTransit.isError).toBe(true)
+  expect(await readState()).toEqual(busState)
 
   const unauthenticated = await fetch(`${origin}/api/neko-wander/state?sessionId=${agent.id}`)
   expect(unauthenticated.status).toBe(401)
@@ -219,4 +288,57 @@ it('distinguishes exact place pins from exploration circles while retaining a pl
     name: 'neko_plan_route', arguments: { mode: 'cycling', origin: '114,40', destination: '112.01,38.01' } })
   expect(explicit.isError).toBe(false)
   expect(await readState(waitingAgent.id)).toMatchObject({ route: { origin: { lng: 114, lat: 40 } } })
+  const previousRoute = await readState(waitingAgent.id)
+  cyclingInvalid = true
+  const badCycling = await ctx.tools.execute({ agent: waitingAgent, signal: new AbortController().signal, callId: ToolCallId('invalid-cycling-response'),
+    name: 'neko_plan_route', arguments: { mode: 'cycling', origin: '112.560896,37.885418', destination: '112.565183,37.85012', via: '112.565734,37.866464' } })
+  expect(badCycling.isError).toBe(true)
+  expect(badCycling.content).toMatchInlineSnapshot(`
+    [
+      {
+        "text": "Error: 高德返回数据格式异常：data 应为对象，请重新查询",
+        "type": "text",
+      },
+    ]
+  `)
+  expect(await readState(waitingAgent.id)).toEqual(previousRoute)
+  cyclingInvalid = false
+  cyclingQps = true
+  const beforeQps = providerCalls.length
+  const qpsFailure = await ctx.tools.execute({ agent: waitingAgent, signal: new AbortController().signal, callId: ToolCallId('cycling-qps'),
+    name: 'neko_plan_route', arguments: { mode: 'cycling', origin: '112,38', destination: '112.01,38.01' } })
+  expect(qpsFailure.isError).toBe(true)
+  expect(qpsFailure.content).toMatchInlineSnapshot(`
+    [
+      {
+        "text": "Error: 高德请求频率超限：CUQPS_HAS_EXCEEDED_THE_LIMIT（10021）。请稍后重试，并检查同一账号下其他应用的调用频率。",
+        "type": "text",
+      },
+    ]
+  `)
+  expect(providerCalls).toHaveLength(beforeQps + 3)
+  expect(await readState(waitingAgent.id)).toEqual(previousRoute)
+  const areaBeforeClear = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('area-before-clear-route'),
+    name: 'neko_show_area', arguments: { name: '蛋糕店周边', center: '112,38', radiusMeters: 300 } })
+  expect(areaBeforeClear.isError).toBe(false)
+  const beforeClear = await readState()
+  const clearRoute = await ctx.tools.execute({ agent, signal: new AbortController().signal, callId: ToolCallId('clear-route'),
+    name: 'neko_clear_route', arguments: {} })
+  expect(clearRoute.isError).toBe(false)
+  expect(clearRoute.content).toMatchInlineSnapshot(`
+    [
+      {
+        "text": "{"routeCleared":true}",
+        "type": "text",
+      },
+    ]
+  `)
+  expect(await readState()).not.toHaveProperty('route')
+  expect(await readState()).not.toHaveProperty('detour')
+  expect(await readState()).toHaveProperty('places', beforeClear.places)
+  expect(await readState()).toHaveProperty('area', beforeClear.area)
+  const tools = ctx.tools
+  expect(tools.get('neko_clear_route')).toBeDefined()
+  await ctx.fiber.dispose()
+  expect(tools.get('neko_clear_route')).toBeUndefined()
 }, 30000)

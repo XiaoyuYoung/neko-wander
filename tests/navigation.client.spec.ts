@@ -6,7 +6,7 @@ const destination = { lng: 112.6, lat: 38 }
 const via = { lng: 112.5, lat: 37.9 }
 
 it.each([
-  ['driving', 'car'], ['walking', 'walk'], ['cycling', 'ride'], ['ebike', 'ride'],
+  ['driving', 'car'], ['walking', 'walk'], ['cycling', 'ride'], ['transit', 'bus'], ['ebike', 'ride'],
 ] as const)('opens %s in AMap using the requested coordinates without credentials', (mode, expected) => {
   const links = navigationLinks({ mode, origin, destination })
   const url = new URL(links.primary)

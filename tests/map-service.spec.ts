@@ -58,7 +58,7 @@ describe('AMapService', () => {
   })
 
   it.each([
-    ['walking', 'walking'], ['cycling', 'bicycling'], ['ebike', 'electrobike'],
+    ['walking', 'walking'], ['ebike', 'electrobike'],
   ] as const)('plans %s with its own endpoint and requests time and geometry', async (mode, endpoint) => {
     const fake = fakeFetch([{ status: '1', route: { paths: [{ distance: '1500', cost: { duration: '600' },
       steps: [{ polyline: '112,38;112.01,38.01' }] }] } }])
@@ -69,8 +69,31 @@ describe('AMapService', () => {
     expect(fake.calls[0]?.searchParams.get('show_fields')).toBe('cost,polyline')
   })
 
+  it.each([0, '0'])('reads v4 cycling data.paths and duration with success code %s', async errcode => {
+    const fake = fakeFetch([{ errcode, errmsg: 'OK', data: { paths: [{ distance: 4500, duration: 1200,
+      steps: [{ polyline: '112.560896,37.885418;112.565183,37.85012' }] }] } }])
+    const origin = parsePoint('112.560896,37.885418'), destination = parsePoint('112.565183,37.85012')
+    const route = await new AMapService('test-key', fake.request).plan('cycling', origin, destination)
+    expect(route).toMatchObject({ mode: 'cycling', origin, destination, distanceKm: 4.5, durationMinutes: 20 })
+    expect(fake.calls[0]?.pathname).toBe('/v4/direction/bicycling')
+    expect(fake.calls[0]?.searchParams.get('origin')).toBe('112.560896,37.885418')
+    expect(fake.calls[0]?.searchParams.get('destination')).toBe('112.565183,37.85012')
+    expect(fake.calls[0]?.searchParams.has('show_fields')).toBe(false)
+  })
+
+  it.each([
+    [{ errcode: 0, data: [] }, 'data 应为对象'],
+    [{ errcode: 0, data: { paths: {} } }, 'data.paths 应为路线数组'],
+    [{ errcode: 0, data: { paths: [] } }, '未找到可用路线'],
+    [{ errcode: 0, data: { paths: [{ distance: 100, steps: [] }] } }, '缺少有效时长或距离'],
+    [{ errcode: 0, data: { paths: [{ distance: 100, duration: 30, steps: [] }] } }, '缺少轨迹'],
+  ])('reports a specific cause for incomplete cycling responses', async (response, message) => {
+    await expect(new AMapService('test-key', fakeFetch([response]).request)
+      .plan('cycling', parsePoint('112,38'), parsePoint('112.01,38.01'))).rejects.toThrow(String(message))
+  })
+
   it('combines cycling legs through a candidate before rounding totals', async () => {
-    const response = (polyline: string) => ({ status: '1', route: { paths: [{ distance: '69', cost: { duration: '31' }, steps: [{ polyline }] }] } })
+    const response = (polyline: string) => ({ errcode: 0, data: { paths: [{ distance: 69, duration: 31, steps: [{ polyline }] }] } })
     const fake = fakeFetch([response('112,38;112.01,38.01'), response('112.01,38.01;112.02,38.02')])
     const route = await new AMapService('test-key', fake.request).plan('cycling', parsePoint('112,38'), parsePoint('112.02,38.02'), parsePoint('112.01,38.01'))
     expect(route.durationMinutes).toBe(1)
@@ -83,14 +106,14 @@ describe('AMapService', () => {
   })
 
   it('compares cycling detours using unrounded times and distances in the same mode', async () => {
-    const response = (duration: number, distance: number) => ({ status: '1', route: { paths: [{ distance, cost: { duration }, steps: [{ polyline: '112,38;112.01,38.01' }] }] } })
+    const response = (duration: number, distance: number) => ({ errcode: 0, data: { paths: [{ distance, duration, steps: [{ polyline: '112,38;112.01,38.01' }] }] } })
     const fake = fakeFetch([response(29, 149), response(31, 100), response(31, 100)])
     const detour = await new AMapService('test-key', fake.request).compareDetour('cycling', parsePoint('112,38'), parsePoint('112.02,38.02'), parsePoint('112.01,38.01'))
     expect(detour.extraMinutes).toBe(1)
     expect(detour.extraKm).toBe(0.1)
     expect(detour.direct.mode).toBe('cycling')
     expect(detour.via.mode).toBe('cycling')
-    expect(fake.calls.map(url => url.pathname)).toEqual(Array(3).fill('/v5/direction/bicycling'))
+    expect(fake.calls.map(url => url.pathname)).toEqual(Array(3).fill('/v4/direction/bicycling'))
   })
 
   it('reports unavailable routes and provider errors without substituting driving', async () => {
@@ -100,10 +123,17 @@ describe('AMapService', () => {
     const noRoute = fakeFetch([{ status: '1', route: { paths: [] } }])
     await expect(new AMapService('test-key', noRoute.request).plan('walking', parsePoint('112,38'), parsePoint('112.01,38.01'))).rejects.toThrow('未找到可用路线')
     const partial = fakeFetch([
-      { status: '1', route: { paths: [{ distance: '100', cost: { duration: '30' }, steps: [{ polyline: '112,38;112.01,38.01' }] }] } },
-      { status: '0', info: 'NO_ROUTE', infocode: '30003' },
+      { errcode: 0, data: { paths: [{ distance: 100, duration: 30, steps: [{ polyline: '112,38;112.01,38.01' }] }] } },
+      { errcode: 30003, errmsg: 'NO_ROUTE', errdetail: 'NO_ROUTE' },
     ])
     await expect(new AMapService('test-key', partial.request).plan('cycling', parsePoint('112,38'), parsePoint('112.02,38.02'), parsePoint('112.01,38.01'))).rejects.toThrow('NO_ROUTE')
+  })
+
+  it('retains v4 error codes and details without exposing credentials', async () => {
+    const fake = fakeFetch([{ errcode: 10003, errmsg: 'DAILY_QUERY_OVER_LIMIT', errdetail: '骑行日配额不足' }])
+    await expect(new AMapService('sensitive-fixture-key', fake.request).plan('cycling', parsePoint('112,38'), parsePoint('112.01,38.01')))
+      .rejects.toThrow('高德请求失败：骑行日配额不足（10003）')
+    expect(fake.calls).toHaveLength(1)
   })
 
   it('searches within a configured radius', async () => {

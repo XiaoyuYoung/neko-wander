@@ -219,11 +219,15 @@ export function MapBody({ sessionId, t }: Pick<PropsRuntime<'sidebar.right.pane.
       strokeColor: '#5f9de9', strokeOpacity: 0.7, strokeWeight: 2,
       fillColor: '#83b8ff', fillOpacity: 0.16, zIndex: 10, bubble: true,
     }))
-    if (state.route?.path.length) next.push(new api.Polyline({
-      path: state.route.path.map(point => [point.lng, point.lat]),
-      strokeColor: '#165DDE', strokeWeight: 8, strokeOpacity: 1,
-      isOutline: true, outlineColor: '#ffffff', borderWeight: 2, lineJoin: 'round', lineCap: 'round', showDir: true,
-    }))
+    if (state.route?.path.length) {
+      const sections = state.route.sections ?? [{ mode: state.route.mode, path: state.route.path }]
+      for (const section of sections) next.push(new api.Polyline({
+        path: section.path.map(point => [point.lng, point.lat]),
+        strokeColor: section.mode === 'transit' ? '#087F5B' : '#165DDE', strokeWeight: 8, strokeOpacity: 1,
+        strokeStyle: state.route.mode === 'transit' && section.mode === 'walking' ? 'dashed' : 'solid',
+        isOutline: true, outlineColor: '#ffffff', borderWeight: 2, lineJoin: 'round', lineCap: 'round', showDir: true,
+      }))
+    }
     overlays.current = next
     if (next.length) {
       if (locationRequest.current?.automatic) locationRequest.current.centerAllowed = false
@@ -261,13 +265,22 @@ export function MapBody({ sessionId, t }: Pick<PropsRuntime<'sidebar.right.pane.
       {state.route && navigation && <div className={css.routeSummary}>
         <div className={css.routeActions}>
           <span>{t('route', { mode: t(state.route.mode), minutes: state.route.durationMinutes, km: state.route.distanceKm })}</span>
-          <a className={css.navigate} href={navigation.primary} target="_blank" rel="noopener noreferrer" title={t('navigationTitle')}>{t('startNavigation')} ↗</a>
+          <a className={css.navigate} href={navigation.primary} target="_blank" rel="noopener noreferrer" title={t('navigationTitle')}>{t(state.route.mode === 'transit' ? 'viewTransit' : 'startNavigation')} ↗</a>
           {navigation.onward && <a className={css.onward} href={navigation.onward} target="_blank" rel="noopener noreferrer">{t('navigateOnward')} ↗</a>}
         </div>
         <div className={css.navigationHint}>{t('navigationHint')}</div>
         {navigation.onward && <div className={css.navigationHint}>{t('navigationLegs')}</div>}
         {state.route.mode === 'cycling' && <div className={css.navigationHint}>{t('navigationMobile')}</div>}
         {state.route.mode === 'ebike' && <div className={css.navigationHint}>{t('navigationEbike')}</div>}
+        {state.route.transit && <div>
+          <div>{t('transitSummary', { transfers: state.route.transit.transfers, meters: Math.round(state.route.transit.walkingMeters) })}</div>
+          {state.route.transit.fareYuan !== undefined && <div>{t('transitFare', { fare: state.route.transit.fareYuan })}</div>}
+          {state.route.transit.legs.map((leg, index) => <div key={index}>
+            {t('transitLeg', { line: leg.line, from: leg.boardingStop, to: leg.alightingStop })}
+            {leg.stops !== undefined && <span> · {t('transitStops', { stops: leg.stops })}</span>}
+          </div>)}
+          <div className={css.navigationHint}>{t('transitHint')}</div>
+        </div>}
       </div>}
       {state.detour && <div>{t('detour', { mode: t(state.detour.mode), minutes: state.detour.extraMinutes, km: state.detour.extraKm })}</div>}
       {state.area && <div className={css.areaSummary}>{t('area', { name: state.area.name, radius: state.area.radiusMeters })}</div>}

@@ -1,3 +1,6 @@
+
+
+
 # 溜达喵 Neko Wander
 
 
@@ -20,7 +23,7 @@
   <tr>
     <td align="center"><img src="assets/neko.png" alt="溜达喵角色形象" height="280"></td>
     <td align="center">
-      <a href="https://www.bilibili.com/video/BV1bPns6uEaH"><img src="assets/demo-preview.svg" alt="点击在 B 站观看溜达喵演示视频" width="498" height="280"></a>
+      <video src="https://github.com/user-attachments/assets/f498ca64-5b1a-4f9f-82b3-eecf71df2711" controls height="280"></video>
     </td>
   </tr>
 </table>

@@ -19,10 +19,14 @@
 目前版本仅为测试demo，更多惊喜还在规划
 
 
-<p align="center">
-  <img src="assets/neko.png" alt="溜达喵角色形象" height="280">
-  <video src="https://github.com/user-attachments/assets/f498ca64-5b1a-4f9f-82b3-eecf71df2711" controls height="280"></video>
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="assets/neko.png" alt="溜达喵角色形象" height="280"></td>
+    <td align="center">
+      <video src="https://github.com/user-attachments/assets/f498ca64-5b1a-4f9f-82b3-eecf71df2711" controls height="280"></video>
+    </td>
+  </tr>
+</table>
 
 
 ## 快速开始

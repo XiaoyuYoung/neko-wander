@@ -53,16 +53,38 @@ export AMAP_JS_SECURITY_CODE='对应的 JS API 安全密钥'
 ```
 
 
-### 2. 安装到 DSH Web profile
+### 2. 选择安装方式
 
-**npm 发布后**，可在已安装 DSH CLI 的环境中运行：
+两种方式都需要上面的高德配置值，并在启动 DSH 的同一个终端设置环境变量。使用已发布版本请选择 npm 安装；需要修改插件源码或调试时选择源码构建。
+
+#### 方式一：从 npm 安装预构建包
+
+需要 Node.js 22.19.x 或 24+，以及 DSH CLI `0.2.1-alpha.3`。如果尚未安装 DSH CLI，先运行：
 
 ```sh
-dsh plugin --profile web add @deepseek-ai/dsh-experimental-neko-wander
+npm install -g @deepseek-ai/dsh@0.2.1-alpha.3
+```
+
+然后将插件安装到 DSH Web profile 并启动：
+
+```sh
+dsh plugin --profile web add dsh-neko-wander@alpha
 dsh web
 ```
 
-也可以在 DSH Web 侧边栏的「插件」页面安装同一个 npm 包名。插件的 `dsh.bundle` 会启用 `cordis.patch.yml`，从上述环境变量读取 Key。安装后若插件尚未生效，请重启 Web profile。
+也可以在 DSH Web 侧边栏的「插件」页面安装 `dsh-neko-wander@alpha`。npm 包已包含预构建的 Host、Client 和类型文件，不需要下载插件源码或运行 `npm run build`。插件的 `dsh.bundle` 会启用 `cordis.patch.yml`，从上述环境变量读取 Key。安装后若插件尚未生效，请重启 Web profile。
+
+#### 方式二：从源码构建并运行
+
+需要与插件匹配的 DSH 源码、Node.js 22.19.x 或 24+、pnpm，以及 Windows PowerShell。把本仓库放在 `deepseek-harness/packages/experimental/neko-wander`，然后在 **DSH 仓库根目录**运行：
+
+```powershell
+pnpm install
+pnpm run build:artifacts
+.\packages\experimental\neko-wander\run-local.ps1
+```
+
+`run-local.ps1` 以源码 overlay 启动 DSH Web；默认把试用数据放在插件目录的 `.dsh-local`，不会把 Key 写入仓库。脚本要求插件确实位于上述 DSH 工作区路径。源码试用方式不依赖 npm 上的 `dsh-neko-wander` 包。
 
 
 ### 3. 在对话中使用
@@ -79,24 +101,17 @@ dsh web
 
 目前支持驾车、步行、自行车骑行、公交及地铁换乘、电动自行车路线；也可以比较直达与途经一个候选点的时间、距离差。地图上的导航入口会打开高德，由高德重新计算并让你确认行程。
 
-## 源码本地试用
+## 构建 npm 发布包
 
-此仓库的源码按 DSH 工作区布局使用：把仓库放在 `deepseek-harness/packages/experimental/neko-wander`。需要与本插件匹配的 DSH 源码、Node.js 22.19.x 或 24+、pnpm，以及前面申请的三个高德配置值。当前仓库中的 `run-local.ps1` 仅提供 Windows PowerShell 启动方式。
+维护者可在单独克隆的插件仓库中构建和打包，不需要 DSH 工作区。使用 Node.js 22.19.x 或 24+ 执行：
 
-在 **DSH 仓库根目录**执行：
-
-```powershell
-pnpm install
-pnpm run build:artifacts
-
-$env:AMAP_WEB_KEY = '你的 Web 服务 Key'
-$env:AMAP_JS_KEY = '你的 Web 端 JS API Key'
-$env:AMAP_JS_SECURITY_CODE = '对应的 JS API 安全密钥'
-
-.\packages\experimental\neko-wander\run-local.ps1
+```sh
+npm ci
+npm run build
+npm pack --dry-run
 ```
 
-脚本以源码 overlay 启动 DSH Web；默认把试用数据放在插件目录的 `.dsh-local`，不会把 Key 写入仓库。它要求插件确实位于上述 DSH 工作区路径。该方式用于本地验证；npm 安装方式使用预构建的 `lib/`，不依赖这个脚本。
+`npm pack` 会自动重新构建并检查 Host、Client 和类型声明文件。发布前先检查 npm 账号与包名权限，再执行 `npm publish --tag alpha`。发布操作需要 npm 登录凭据；此处只准备发布产物，不会自动上传。直接纳入 DSH 工作区的常规发布流程时，其实验包命名检查仍按 DSH 自身规则执行；独立 npm 发布使用本仓库的构建流程。
 
 开发者可查看[实现与接口备忘录](https://github.com/XiaoyuYoung/neko-wander/blob/main/docs/implementation-notes.md)，了解路线模式、定位状态和错误处理等细节。
 
